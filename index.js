@@ -1,12 +1,19 @@
 /*
-Version 1.0.0
-Released on 26.06.2022
-*/ 
+Version 1.5.0
+Released on 02.07.2022
+
+New Commands and Features:
+    .promote @user
+    .demote @user
+    .join InviteLink
+    .broadcast Message_to_send
+
+*/
 
 const rp = require('request-promise');
 const qrcode = require('qrcode-terminal');
 const fs = require('fs');
-const { Client, LocalAuth } = require('whatsapp-web.js');
+const { Client, List, Buttons, Contact, LocalAuth } = require('whatsapp-web.js');
 
 
 // Global variables
@@ -18,16 +25,19 @@ const relative_server_time = 19800;   // 5.5 hours
 const super_admin = "918505077040@c.us";
 const config_file = './bot_config.json';
 var CONFIG = {             // Default configuration
-    "interval": "14400000",
-    "remind_before": "46800000",
     "admins": [
         "918505077040@c.us"
     ],
-    "groups": [
-        "120363041093855277@g.us"
-    ]
+    "groups": {}
 }
-const DEFAULT_CONFIG = JSON.parse(JSON.stringify(CONFIG));
+// const DEFAULT_CONFIG = JSON.parse(JSON.stringify(CONFIG));
+const DEFAULT_CONFIG = {
+    "enabled": false,
+    "interval": 21600000,
+    "remind_before": 86400000,
+    "last_reminded_at": 0,
+    "handles": []
+};
 
 try {
     console.log("Reading config file...");
@@ -65,79 +75,125 @@ client.on('ready', () => {
 
 client.initialize();
 
-client.on('message', message => {
+client.on('message', async message => {
     console.log(message.from, message.author, message.body);
-    var bot_reply = parse(message);
-    if (bot_reply != "") {
-        client.sendMessage(message.from, bot_reply.trim());
-    }
+    await parse(message);
+    // if (bot_reply != "") {
+    //     client.sendMessage(message.from, bot_reply.trim());
+    // }
 });
 
-
+if (!Date.now) {
+    Date.now = function() { return new Date().getTime(); }
+}
+function CurTimestamp() {
+    return new Date().valueOf();
+}
 
 // To parse message send by user
-function parse(message) {
+async function parse(message) {
     var body = message.body;
     if (body[0] === '.') {
         // User send a command
         // Get which command
-        body = body.toLowerCase();
+
+        // Send Hello World if it is first command
+        await check_if_first_msg(message);
+
         body = body.replace(/ +(?= )/g, ''); // Remove double spaces
         body = body.replace(". ", ".");
-
+        
+        // Special case for broadcast command
+        if (body.startsWith(".broadcast")) {
+            Broadcast(message, body.slice(".broadcast".length));
+            return;
+        }
+        
         let command = body.split(' ')[0].substring(1);
+        let argline = body.slice(command.length + 1);
         let args = body.split(' ').slice(1);
+        command.toLowerCase();
 
         // return "Your command:\n\n" + command;
         switch (command) {
             case 'contest':
-                return Contests(message);
+                Contests(message);
+                break;
 
             case 'contests':
-                return Contests(message);
+                Contests(message);
+                break;
 
             case 'help':
-                return Help();
+                Help(message);
+                break;
 
             case 'about':
-                return About();
+                About(message);
+                break;
 
             case 'promote':
-                return Promote(message, args);
+                Promote(message, args);
+                break;
 
             case 'demote':
-                return Demote(message, args);
+                Demote(message, args);
+                break;
 
             case 'enable':
-                return Enable_reminder(message);
+                Enable_reminder(message);
+                break;
 
             case 'disable':
-                return Disable_reminder(message);
+                Disable_reminder(message);
+                break;
 
             case 'interval':
-                return Interval(message, args);
+                Interval(message, args);
+                break;
 
             case 'remind_before':
-                return Remind_before(message, args);
+                Remind_before(message, args);
+                break;
 
             case 'reminder':
-                return Remind_before(message, args);
+                Remind_before(message, args);
+                break;
 
             case "config":
-                return Bot_config(message);
+                Bot_config(message);
+                break;
 
             case "reset":
-                return Reset(message, args);
+                Reset(message, args);
+                break;
+
+            case "test":
+                Test(message, args);
+                break;
+            
+            case "t":
+                check_if_first_msg(message);
+                break;
+            
+            case "join":
+                Join(message, args);
+                break;
+            
+            case "broadcast":
+                Broadcast(message, argline);
+                break;
 
             default:
-                return "Command not found⚠️\n\nUse *.help* to get list of all commands​🤖​";
+                client.sendMessage(message.from, "Command not found⚠️\n\nUse *.help* to get list of all commands​🤖​");
         }
 
-    } else {
-        // User send a message
-        // return "Your Message:\n\n" + body;
-        return "";
     }
+    // else {
+    //     // User send a message
+    //     // return "Your Message:\n\n" + body;
+    //     return "";
+    // }
 }
 
 
@@ -145,208 +201,344 @@ function parse(message) {
 
 // Functions to generate replies for bot commands
 
-function Help() {
-    return help_reply.trim();
+function Help(message) {
+    client.sendMessage(message.from, help_reply.trim());
 }
 
 
-function About() {
-    return about_reply.trim();
+function About(message) {
+    client.sendMessage(message.from, about_reply.trim());
 }
 
 
-function send_contests_reply(message) {
+async function Contests(message) {
+    await get_contests();
     client.sendMessage(message.from, contest_list.trim());
 }
 
 
-function Contests(message) {
-    get_contests();
-    setTimeout(function () { send_contests_reply(message); }, 4000);
-    return "";
-}
-
-
-function Promote(message, args) {
+async function Promote(message, args) {
+    // Only bot admins can promote others to bot admins
+    // Group admins can't promote others to bot admins
     var isGroup = is_group(message);
     var isAdmin = is_admin(message);
     if (args.length == 0) {
-        return "Please specify a 12 digit mobile number (with country code) after command.📱​\nExample:\n*.promote 919876543210*";
+        client.sendMessage(message.from, "Usage:\n*.promote @user*");
+        return;
     }
     var mobno = args[0].trim();
+    mobno = mobno.replace("@", "");
     if (mobno.length != 12 || isNaN(mobno)) {
-        return "Please Enter a valid mobile number⚠️\nExample:\n*.promote 919876543210*";
+        client.sendMessage(message.from, "Please Enter a valid mobile number or @tag⚠️\nExample:\n*.promote @user*");
+        return;
     }
     var username = mobno + "@c.us";
     if (CONFIG.admins.includes(username)) {
-        return "User is already an admin!​🤖​​";
+        client.sendMessage(message.from, "User is already an bot admin!​🤖​​");
+        return;
     }
     if (!isGroup) {
-        return "This command is only available in groups‼️";
+        client.sendMessage(message.from, "This command is only available in groups‼️");
+        return;
     }
     if (!isAdmin) {
-        return "This command is only available for admins‼️";
+        client.sendMessage(message.from, "This command is only available for bot admins‼️");
+        return;
     }
-    CONFIG.admins.push(username);
-    update_config();
-    return "Success: User *" + mobno + "* promoted to admin✅​";
+    try {
+        var contact = await client.getContactById(username);
+        client.sendMessage(message.from, `Success: User @${contact.number} promoted to admin✅`, {mentions: [contact]});
+        CONFIG.admins.push(username);
+        update_config();
+        return;
+    }
+    catch (err) {
+        client.sendMessage(message.from, "Error: User not found⚠️");
+        return;
+    }
 }
 
 
-function Demote(message, args) {
+async function Demote(message, args) {
+    // Only bot admins can demote others from bot admins
+    // Group admins can't demote others from bot admins
     var isGroup = is_group(message);
     var isAdmin = is_admin(message);
     if (args.length == 0) {
-        return "Please specify a 12 digit mobile number (with country code) after command.📱\nExample:\n*.demote 919876543210*";
+        client.sendMessage(message.from, "Usage:\n*.demote @user*");
+        return;
     }
     var mobno = args[0].trim();
+    mobno = mobno.replace("@", "");
     if (mobno.length != 12 || isNaN(mobno)) {
-        return "Please Enter a valid mobile number⚠️\nExample:\n*.demote 919876543210*";
+        client.sendMessage(message.from, "Please Enter a valid mobile number or @tag⚠️\nExample:\n*.demote @user*");
+        return;
     }
     var username = mobno + "@c.us";
     if (username == super_admin) {
-        return "You can't demote a super admin🙃​";
+        client.sendMessage(message.from, "You can't demote a super admin🙃​");
+        return;
     }
     if (!CONFIG.admins.includes(username)) {
-        return "User is not an admin⚠️";
+        client.sendMessage(message.from, "User is not an bot admin⚠️");
+        return;
     }
     if (!isGroup) {
-        return "This command is only available in groups‼️";
+        client.sendMessage(message.from, "This command is only available in groups‼️");
+        return;
     }
     if (!isAdmin) {
-        return "This command is only available for admins‼️";
+        client.sendMessage(message.from, "This command is only available for bot admins‼️");
+        return;
     }
-    CONFIG.admins.splice(CONFIG.admins.indexOf(username), 1);
-    update_config();
-    return "Success: User *" + mobno + "* demoted from admin🚫​";
+    try {
+        var contact = await client.getContactById(username);
+        client.sendMessage(message.from, `Success: User @${contact.number} demoted from bot admin🚫`, {mentions: [contact]});
+        CONFIG.admins.splice(CONFIG.admins.indexOf(username), 1);
+        update_config();
+        return;
+    }
+    catch (err) {
+        client.sendMessage(message.from, "Error: User not found⚠️");
+        return;
+    }
 }
 
 
-function Enable_reminder(message) {
+
+async function Enable_reminder(message) {
     var isGroup = is_group(message);
     // var isAdmin = is_admin(message);
     var isAdmin = true;
-    var chatid = message.from;
-    if (chatid.endsWith("@c.us")) {
-        return "This command is not allowed in DM⚠️\nPlease use this command in a group​🤖​";
-    }
-    if (CONFIG.groups.includes(chatid)) {
-        return "This group is already enabled for reminders​🤖​";
-    }
+    var groupid = message.from;
     if (!isGroup) {
-        return "This command is only available in groups‼️";
+        client.sendMessage(message.from, "This command is not allowed in DM⚠️\nPlease use this command in a group​🤖​");
+        return;
+    }
+
+    await check_if_first_msg(message);
+
+    if (CONFIG.groups[groupid].enabled) {
+        client.sendMessage(message.from, "This group is already enabled for reminders​🤖​");
+        return;
     }
     if (!isAdmin) {
-        return "This command is only available for admins‼️";
+        client.sendMessage(message.from, "This command is only available for bot admins‼️");
+        return;
     }
-    CONFIG.groups.push(chatid);
+    CONFIG.groups[groupid].enabled = true;
+    CONFIG.groups[groupid].last_reminded_at = 0;
     update_config();
-    get_contests();
-    setTimeout(send_reminder, 10000);   // Send reminder after 10 seconds so that contest list get updated
-    return "CodeForces contest reminder enabled for this group✅";
+    client.sendMessage(message.from, `
+CodeForces Contests reminders enabled for this group✅
+
+Current reminders interval is *${parseInt(CONFIG.groups[groupid].interval / 60000)} minutes*🕛​
+And will be sent *${parseInt(CONFIG.groups[groupid].remind_before / 3600000)} hours*⏰ before the contest.
+`.trim());
+
 }
 
 
-function Disable_reminder(message) {
+async function Disable_reminder(message) {
     var isGroup = is_group(message);
     // var isAdmin = is_admin(message);
     var isAdmin = true;
-    var chatid = message.from;
-    if (chatid.endsWith("@c.us")) {
-        return "This command is not allowed in DM⚠️\nPlease use this command in a group​🤖​";
-    }
-    if (!CONFIG.groups.includes(chatid)) {
-        return "This group is already disabled for reminders​🤖​";
-    }
+    var groupid = message.from;
     if (!isGroup) {
-        return "This command is only available in groups‼️";
+        client.sendMessage(message.from, "This command is not allowed in DM⚠️\nPlease use this command in a group​🤖​");
+        return;
+    }
+
+    await check_if_first_msg(message);
+
+    if (!CONFIG.groups[groupid].enabled) {
+        client.sendMessage(message.from, "This group is already disabled for reminders​🤖​");
+        return;
     }
     if (!isAdmin) {
-        return "This command is only available for admins‼️";
+        client.sendMessage(message.from, "This command is only available for bot admins‼️");
+        return;
     }
-    CONFIG.groups.splice(CONFIG.groups.indexOf(chatid), 1);
+    CONFIG.groups[groupid].enabled = false;
     update_config();
-    return "CodeForces contest reminder disabled for this group🚫";
+    client.sendMessage(message.from, "CodeForces contest reminder disabled for this group🚫");
 }
 
 
-function Interval(message, args) {
+
+async function Interval(message, args) {
     var isGroup = is_group(message);
     var isAdmin = is_admin(message);
+    if (!isGroup) {
+        client.sendMessage(message.from, "This command is only available in groups‼️");
+        return;
+    }
+    var groupid = message.from;
+    var isGrpAdmin = false;
+    if (isGroup) {
+        isGrpAdmin = await is_group_admin(message);
+    }
     if (args.length == 0) {
-        return `Interval between checking for contests: ${parseInt(CONFIG.interval / 60000)} minutes🕛`;
+        client.sendMessage(message.from, `Interval between checking for contests: *${parseInt(CONFIG.groups[groupid].interval / 60000)} minutes*🕛`);
+        return;
     }
     try {
         var interval_min = args[0];
         var interval = parseInt(interval_min) * 60000;
         if (interval == null || isNaN(interval)) {
-            return "Error in setting interval: Please enter a valid interval in minutes⚠️\nExample:\n*.interval 10*";
+            client.sendMessage(message.from, "Error in setting interval: Please enter a valid interval in minutes⚠️\nExample:\n*.interval 10*");
+            return;
         }
-        if (!isGroup) {
-            return "This command is only available in groups‼️";
+        if (!(isAdmin || isGrpAdmin)) {
+            client.sendMessage(message.from, "This command is only available for admins‼️");
+            return;
         }
-        if (!isAdmin) {
-            return "This command is only available for admins‼️";
-        }
-        CONFIG.interval = interval;
+        CONFIG.groups[groupid].interval = interval;
         update_config();
-        return `Interval between checking for contests set to ${parseInt(CONFIG.interval / 60000)} minutes🕛`;
+        client.sendMessage(message.from, `Interval between checking for contests set to *${parseInt(CONFIG.groups[groupid].interval / 60000)} minutes*🕛`);
+        return;
     } catch (err) {
-        return "Error in setting interval: Please enter a valid interval in minutes⚠️\nExample:\n*.interval 10*";
+        client.sendMessage(message.from, "Error in setting interval: Please enter a valid interval in minutes⚠️\nExample:\n*.interval 10*");
+        return;
     }
 }
 
 
-function Remind_before(message, args) {
+async function Remind_before(message, args) {
     var isGroup = is_group(message);
     var isAdmin = is_admin(message);
+    if (!isGroup) {
+        client.sendMessage(message.from, "This command is only available in groups‼️");
+        return;
+    }
+    var groupid = message.from;
+    var isGrpAdmin = false;
+    if (isGroup) {
+        isGrpAdmin = await is_group_admin(message);
+    }
     if (args.length == 0) {
-        return `Reminder time before contest: ${parseInt(CONFIG.remind_before / 3600000)} hours⏰`;
+        client.sendMessage(message.from, `Reminder time before contest: *${parseInt(CONFIG.groups[groupid].remind_before / 3600000)} hours*⏰`);
+        return;
     }
     try {
         var remind_before = args[0];
         var remind_before_hours = parseInt(remind_before);
         var remind_before_milliseconds = remind_before_hours * 3600000;
         if (remind_before_milliseconds == null || isNaN(remind_before_milliseconds)) {
-            return "Error in setting reminder time: Please enter a valid time in hours⚠️\nExample:\n*.reminder 2*";
+            client.sendMessage(message.from, "Error in setting reminder time: Please enter a valid time in hours⚠️\nExample:\n*.reminder 2*");
+            return;
         }
-        if (!isGroup) {
-            return "This command is only available in groups‼️";
+        if (!(isAdmin || isGrpAdmin)) {
+            client.sendMessage(message.from, "This command is only available for admins‼️");
+            return;
         }
-        if (!isAdmin) {
-            return "This command is only available for admins‼️";
-        }
-        CONFIG.remind_before = remind_before_milliseconds;
+        CONFIG.groups[groupid].remind_before = remind_before_milliseconds;
         update_config();
-        return `Reminder time before contest set to ${parseInt(CONFIG.remind_before / 3600000)} hours⏰`;
+        client.sendMessage(message.from, `Reminder time before contest set to *${parseInt(CONFIG.groups[groupid].remind_before / 3600000)} hours*⏰`);
+        return;
     } catch (err) {
-        return "Error in setting reminder time: Please enter a valid time in hours⚠️\nExample:\n*.reminder 2*";
+        client.sendMessage(message.from, "Error in setting reminder time: Please enter a valid time in hours⚠️\nExample:\n*.reminder 2*");
+        return;
     }
 }
 
 
 function Bot_config(message) {
-    return "```" + JSON.stringify(CONFIG, null, 2) + "```";
+    client.sendMessage(message.from, "```" + JSON.stringify(CONFIG, null, 2) + "```");
 }
 
 
 function Reset(message, args) {
     var isGroup = is_group(message);
     var isAdmin = is_admin(message);
+    if (!isGroup) {
+        client.sendMessage(message.from, "This command is only available in groups‼️");
+        return;
+    }
+    var groupid = message.from;
     if (args.length == 0) {
-        return "Are you sure you want to reset❓\nAll the configurations will be reset to default⚠️\n\nUsage: *.reset CONFIRM*";
+        client.sendMessage(message.from, "Are you sure you want to reset❓\nAll the configurations for this group will be reset to default⚠️\n\nUsage: *.reset CONFIRM*");
+        return;
     }
     if (!isAdmin) {
-        return "This command is only available for admins‼️";
+        client.sendMessage(message.from, "This command is only available for admins‼️");
+        return;
     }
     if (args[0].toUpperCase() == "CONFIRM") {
-        CONFIG = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+        CONFIG.groups[groupid] = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
         update_config();
-        return "Success: Configurations reset to default✅";
+        client.sendMessage(message.from, "Success: Configurations reset to default✅");
+        return;
     }
-    return "Are you sure you want to reset❓\nAll the configurations will be reset to default⚠️\n\nUsage: *.reset CONFIRM*";
+    client.sendMessage(message.from, "Are you sure you want to reset❓\nAll the configurations for this group will be reset to default⚠️\n\nUsage: *.reset CONFIRM*");
+    return;
 }
 
+async function Test(message, args) {
+    // let button = new Buttons('Button body',[{body:'bt1'},{body:'bt2'},{body:'bt3'}],'title','footer');
+    // client.sendMessage(message.from, button);
+    
+    // let sections = [{title:'sectionTitle',rows:[{title:'ListItem1', description: 'desc'},{title:'ListItem2'}]}];
+    // let list = new List('List body','btnText',sections,'Title','footer');
+    // client.sendMessage(message.from, list);
+    // return
+    
+    
+    var isGroup = is_group(message);
+    var isAdmin = is_admin(message);
+    var isGrpAdmin = false;
+    if (isGroup) {
+        isGrpAdmin = await is_group_admin(message);
+    }
+    client.sendMessage(message.from, `
+isGroup: ${isGroup}
+isAdmin: ${isAdmin}
+isGrpAdmin: ${isGrpAdmin}
+    `.trim());
+    
+}
+
+async function T(message, args) {
+    return;
+    // contact = new Contact('+919012345678');
+    // client.sendMessage(message.from, `Success: User @${contact.number} promoted to bot admin✅​`, {mentions: [contact]});
+}
+
+
+async function Join(message, args) {
+    if (args.length == 0) {
+        client.sendMessage(message.from, "Usage: *.join InviteCode*");
+        return;
+    }
+    var inviteCode = args[0];
+    inviteCode = inviteCode.replace('https://chat.whatsapp.com/', '');
+    console.log(inviteCode);
+    try {
+        await client.acceptInvite(inviteCode);
+        message.reply('Success: Joined the group✅');
+    } catch (e) {
+        message.reply('Error: Invalid invite code❌');
+    }
+}
+
+
+function Broadcast(message, argline) {
+    var isAdmin = is_admin(message);
+    if (!isAdmin) {
+        return "This command is only available for bot admins‼️";
+    }
+    argline = argline.trim();
+    if (argline.length == 0) {
+        return "Usage: *.broadcast Message*";
+    }
+    var message_to_send = argline;
+    var groups = Object.keys(CONFIG.groups);
+    for (var i = 0; i < groups.length; i++) {
+        var groupid = groups[i];
+        client.sendMessage(groupid, message_to_send);
+    }
+    client.sendMessage(message.from, "Success: Message sent to all group members✅")
+}
 
 
 
@@ -370,12 +562,43 @@ function is_admin(message) {
     return false;
 }
 
+async function is_group_admin(message) {
+    var chat = await message.getChat();
+    if (chat.isGroup) {
+        const authorId = message.author;
+        for (let participant of chat.participants) {
+            if (participant.id._serialized === authorId) {
+                return participant.isAdmin;
+            }
+        }
+    }
+    return false;
+}
 
 
-function get_contests() {
-    rp(contest_url)
-        .then(function (body) {
-            // console.log(body);
+
+async function check_if_first_msg(message) {
+    var chat = await message.getChat();
+    if (!chat.isGroup) {
+        return;
+    }
+    var groupid = message.from;
+    if (groupid in CONFIG.groups) {
+        return;
+    }
+    CONFIG.groups[groupid] = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+    update_config();
+    await client.sendMessage(message.from, `Hello World!`);
+}
+
+
+
+
+
+async function get_contests() {
+    await rp(contest_url)
+    .then(function (body) {
+        // console.log(body);
             let json = null;
             try {
                 json = JSON.parse(body).result;
@@ -402,12 +625,14 @@ function get_contests() {
             }
             catch (e) {
                 console.log("CodeForces is down!");
+                contest_list = "CodeForces is down⚠️";
                 return "CodeForces is down⚠️";
             }
         }
         )
         .catch(function (err) {
             console.log(err);
+            contest_list = "CodeForces is down⚠️";
             return "CodeForces is down⚠️";
         });
 }
@@ -478,35 +703,62 @@ function update_config() {
 }
 
 
-function send_reminder() {
-    if (upcoming_contest != null && (-parseInt(upcoming_contest.relativeTimeSeconds))*1000 <= CONFIG.remind_before) {
-        var timeLeft = parseTimeLeft(-parseInt(upcoming_contest.relativeTimeSeconds));
-        var time = convertTimestamp(upcoming_contest.startTimeSeconds);
-        var reply = "```Reminder for CF Contest🏁:```";
-        reply += `\n*${upcoming_contest.name}*🌐 on\n${time}​📅​\n\n${timeLeft}⏰​`;
-        for (let i = 0; i < CONFIG.groups.length; i++) {
-            client.sendMessage(CONFIG.groups[i], reply.trim());
+async function send_reminder() {
+    // This function is called every minute and it check for groups where it has to send reminder
+    // console.log(`Reminder function called`);
+    if (!is_client_ready) {
+        console.log("Client Not ready...");
+        setTimeout(send_reminder, 5000);
+        return;
+    }
+    var groups = Object.keys(CONFIG.groups);
+    // This for loop will check whether there is atleast one group where we have to send reminder, if yes then it updates contest list
+    for (var i = 0; i < groups.length; i++) {
+        var groupid = groups[i];
+        if (upcoming_contest == null || (CONFIG.groups[groupid].enabled && upcoming_contest != null && (-parseInt(upcoming_contest.relativeTimeSeconds)) * 1000 <= CONFIG.groups[groupid].remind_before  && ((new Date()) - CONFIG.groups[groupid].last_reminded_at) >= CONFIG.groups[groupid].interval)) {
+            await get_contests();
+            break;
         }
     }
-}
-
-
-function check() {
-    if (is_client_ready) {
-        get_contests()
-        setTimeout(send_reminder, 10000);   // Send reminder after 10 seconds so that contest list get updated
-        // console.log("Running...");
-        // console.log(upcoming_contest);
-    } else {
-        console.log("Client Not ready...");
+    
+    var f = false;
+    for (var i = 0; i < groups.length; i++) {
+        var groupid = groups[i];
+        if (CONFIG.groups[groupid].enabled && upcoming_contest != null && (-parseInt(upcoming_contest.relativeTimeSeconds)) * 1000 <= CONFIG.groups[groupid].remind_before  && ((new Date()) - CONFIG.groups[groupid].last_reminded_at) >= CONFIG.groups[groupid].interval) {
+            var timeLeft = parseTimeLeft(-parseInt(upcoming_contest.relativeTimeSeconds));
+            var time = convertTimestamp(upcoming_contest.startTimeSeconds);
+            var reply = "```Reminder for CF Contest🏁:```";
+            reply += `\n*${upcoming_contest.name}*🌐 on\n${time}​📅​\n\n${timeLeft}⏰​`;
+            client.sendMessage(groupid, reply.trim());
+            CONFIG.groups[groupid].last_reminded_at = CurTimestamp();
+            f = true;
+        }
     }
-
-    setTimeout(check, CONFIG.interval);
+    if (f) {
+        update_config();
+    }
+    setTimeout(send_reminder, 5000);
 }
 
-setTimeout(check, 60000);   // Call check for the first time after 1 minute
 
+// function check() {
+//     if (!is_client_ready) {
+//         // get_contests();
+//         // setTimeout(send_reminder, 10000);   // Send reminder after 10 seconds so that contest list get updated
+//         // console.log("Running...");
+//         // console.log(upcoming_contest);
+//     // } else {
+//         console.log("Client Not ready...");
+//         setTimeout(check, 1000);
+//         return;
+//     }
+    
+// }
 
+// setTimeout(check, 60000);   // Call check for the first time after 1 minute
+// check();
+
+send_reminder();
 
 var help_reply = `
 🎉Welcome to the help section of this bot🤖
@@ -527,12 +779,6 @@ _Sends a list of upcomming CF contests_
 *.about*
 _About message_
 
-*.promote 91XXXXXYYYYY*
-_Adds a user to admin list of bot commands_
-
-*.demote 91XXXXXYYYYY*
-_Removes a user from admin list of bot commands_
-
 *.enable*
 _Enables CodeForces Contests reminder for the groups_
 
@@ -540,13 +786,25 @@ _Enables CodeForces Contests reminder for the groups_
 _Disables CodeForces Contests reminder for the groups_
 
 *.interval MINUTES*
-_Sets the time interval in minutes between two consecutive reminders_
+_Sets the time interval in minutes between two consecutive reminders (frequency of reminders)_
 
 *.reminder HOURS*
 _Sets the time in hours before which the bot will start sending reminders_
 
+*.promote @user*
+_Adds a user to bot admin list of bot commands_
+
+*.demote @user*
+_Removes a user from bot admin list of bot commands_
+
+*.join InviteLink*
+_Joins the group using the invite link_
+
+*.broadcast Message_to_send*
+_Sends a message to all the groups in which bot is added_
+
 *.reset CONFIRM*
-_Resets the bot to default configurations. All admins will be removed!_
+_Resets the bot to default configurations for that group. By default, bot is disabled for a group!_
 `;
 
 
