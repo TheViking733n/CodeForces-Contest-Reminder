@@ -1,13 +1,11 @@
 /*
-Version 2.0.0
-Released on 09.07.2022
+Version 2.1.0
+Released on 10.09.2022
 
-New Commands and Features:
-    .adduser handle1 handle2 ...
-    .deleteuser handle1 handle2 ...
-    .listusers
-    .performance CONTEST_ID
-    .ratings
+New Features:
+    Added Note for unusual contest time.
+    Contest Registration link will also be sent with the reminder.
+    Improved UI for contest command.
 
 */
 
@@ -21,6 +19,7 @@ const { Client, List, Buttons, Contact, LocalAuth } = require('whatsapp-web.js')
 
 // Global variables
 const contest_url = "https://codeforces.com/api/contest.list?gym=false";
+const registration_url = "https://codeforces.com/contestRegistration/";
 var contest_list = "CodeForces is down⚠️";
 var is_client_ready = false;
 var upcoming_contest = null;
@@ -1080,6 +1079,10 @@ async function send_reminder() {
             var time = convertTimestamp(upcoming_contest.startTimeSeconds);
             var reply = "```Reminder for CF Contest🏁:```";
             reply += `\n*${upcoming_contest.name}*🌐 on\n${time}​📅​\n\n${timeLeft}⏰​`;
+            if (!time.includes("8:05 PM")) {
+                reply += `\n\n⚠ *Note the unusual time* ⚠`;
+            }
+            reply += `\n\nRegistration Link: ${registration_url}${upcoming_contest.id}`;
             client.sendMessage(groupid, reply.trim());
             CONFIG.groups[groupid].last_reminded_at = CurTimestamp();
             f = true;
