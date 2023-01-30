@@ -1,11 +1,9 @@
 /*
-Version 2.1.0
-Released on 10.09.2022
+Version 2.2.0
+Released on 30.01.2023
 
 New Features:
-    Added Note for unusual contest time.
-    Contest Registration link will also be sent with the reminder.
-    Improved UI for contest command.
+    One new admin commands added: .addmem
 
 */
 
@@ -181,6 +179,7 @@ async function parse(message) {
                 break;
 
             case "test":
+            case "info":
                 Test(message, args);
                 break;
                         
@@ -220,6 +219,19 @@ async function parse(message) {
             case "ratings":
             case "rating":
                 CommandRatings(message);
+                break;
+            
+            case "addmember":
+            case "addmembers":
+            case "addmem":
+                Addmembers(message, argline.toLowerCase());
+                break;
+            
+            case "createcontact":
+            case "createcontacts":
+            case "contactcard":
+            case "contactcards":
+                Contactcards(message, argline.toLowerCase());
                 break;
 
             default:
@@ -536,6 +548,7 @@ async function Test(message, args) {
 isGroup: ${isGroup}
 isAdmin: ${isAdmin}
 isGrpAdmin: ${isGrpAdmin}
+ChatID: ${message.from}
     `.trim());
     
 }
@@ -737,6 +750,92 @@ async function CommandRatings(message) {
     reply += "=============================```";
     client.sendMessage(message.from, reply);
 }
+
+
+
+
+async function Addmembers(message, argline) {
+    // Only bot admins can promote others to bot admins
+    // Group admins can't promote others to bot admins
+    var isGroup = is_group(message);
+    var isGrpAdmin = false;
+    if (isGroup) {
+        isGrpAdmin = await is_group_admin(message);
+    }
+    var isAdmin = is_admin(message);
+    argline = argline.replace(/\n/g, " ");
+    var mobiles = argline.split(" ");
+    // console.log(mobiles);
+    var mobiles_filtered = [];
+    // Checking length of each mobile no. is 12
+    var default_country_code = "91";
+    for (var i = 0; i < mobiles.length; i++) {
+        var mobno = mobiles[i].trim();
+        if (mobno == "") {
+            continue;
+        }
+        if (mobno.startsWith("+")) {
+            mobno = mobno.substring(1);
+        }
+        // Checking if mobno is a number or not
+        var isWholeNumber = /^\d+$/.test(mobno)
+        if (!isWholeNumber) {
+            client.sendMessage(message.from, "Please Enter a valid 10 or 12 digit mobile number without spaces. \n\n*.addmem 98765XXXXX 98765XXXXX 98765XXXXX*");
+            return;
+        }
+        if (mobno.length == 10) {
+            mobno = default_country_code + mobno;
+        }
+        if (mobno.length != 12 || isNaN(mobno)) {
+            client.sendMessage(message.from, "Please Enter a valid 10 or 12 digit mobile number without spaces. \n\n*.addmem 98765XXXXX 98765XXXXX 98765XXXXX*");
+            return;
+        }
+        mobiles_filtered.push(mobno + "@c.us");
+    }
+    console.log(mobiles_filtered);
+    mobiles = mobiles_filtered;
+    if (mobiles.length == 0) {
+        client.sendMessage(message.from, "Usage:\n*.addmem 98765XXXXX 98765XXXXX 98765XXXXX*");
+        return;
+    }
+    if (!(isGroup || isGrpAdmin)) {
+        client.sendMessage(message.from, "This command is only available in groups‼️");
+        return;
+    }
+    if (!isAdmin) {
+        client.sendMessage(message.from, "This command is only available for bot admins‼️");
+        return;
+    }
+    
+    // Creating chat object of this group
+    var chat = await message.getChat();
+    try {
+        // Adding members to the group
+        var _ = await chat.addParticipants(mobiles)
+        client.sendMessage(message.from, "Members added to the group");
+        return;
+    }
+    catch (err) {
+        console.log(err);
+        client.sendMessage(message.from, "Something went wrong while adding members‼️\n\n*Possible issues:*\nUser contact is not saved by bot\nUser doesn't exists on WhatsApp.\nUser is already in the group.\nUser has blocked this bot.\nUser privacy settings\nThis bot is not admin\n\nPlease try adding manually.");
+        return;
+    }
+}
+
+
+
+
+
+
+
+
+//    =================================================================================================
+//                                         Bot Command Ends
+//    =================================================================================================
+
+
+
+
 
 
 function is_group(message) {
@@ -1150,20 +1249,25 @@ _Sets the time in hours before which the bot will start sending reminders_
 _Adds the CodeForces handles to the list_
 Alias: *.add*
 
-*deleteuser handle1 handle2 ...*
+*.deleteuser handle1 handle2 ...*
 _Removes the CodeForces handles from the list_
 Alias: *.delete  .remove  .removeuser*
 
-*listusers*
+*.listusers*
 _Sends a list of all handles in the group_
 Alias: *.list*
 
-*performance CONTEST_ID*
+*.performance CONTEST_ID*
 _Sends the performance of all users in that contest_
 Alias: *.perf*
 
-*ratings*
+*.ratings*
 _Sends the ratings of all users in the group_
+
+*.addmem 98765XXXXX 98765XXXXX 98765XXXXX*
+_Adds new users to this group. User contact must be saved by bot and bot must be admin_
+Usage:\n*.addmem 98765XXXXX 98765XXXXX 98765XXXXX*
+Alias: *.addmember .addmembers*
 
 *.promote @user*
 _Adds a user to bot admin list of bot commands_
@@ -1183,6 +1287,8 @@ _Resets the bot to default configurations for that group. By default, bot is dis
 
 
 var about_reply = `
+Coding Club Bot Version 2.2.0
+
 Programmed by:
 *The Viking*😎
 https://www.github.com/TheViking733n
