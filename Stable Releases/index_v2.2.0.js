@@ -1,12 +1,11 @@
 /*
-Version 2.2.1
-Released on 22.12.2023
+Version 2.2.0
+Released on 30.01.2023
 
 New Features:
-    Feature to override normal ratings and use christmas ratings.
+    One new admin commands added: .addmem
 
 */
-
 
 const rp = require('request-promise');
 const qrcode = require('qrcode-terminal');
@@ -17,8 +16,6 @@ const { Client, List, Buttons, Contact, LocalAuth } = require('whatsapp-web.js')
 
 
 // Global variables
-const USE_CHRISTMAS_RATINGS = true;   // Set this to false to use normal ratings
-const christmas_ratings_file = "./christmas_ratings.json";
 const contest_url = "https://codeforces.com/api/contest.list?gym=false";
 const registration_url = "https://codeforces.com/contestRegistration/";
 var contest_list = "CodeForces is down⚠️";
@@ -739,10 +736,6 @@ async function CommandRatings(message) {
         return;
     }
     var ratings = await get_ratings(handles);
-    var christmas_ratings = {};
-    if (USE_CHRISTMAS_RATINGS) {
-        christmas_ratings = getChristmasRatings();
-    }
     handles = Object.keys(ratings)  // This is in actual case
     handles.sort(function(a,b) {return ratings[b] - ratings[a]});
     var reply = "*Ratings of handles in the group:*\n\n\n```";
@@ -752,9 +745,6 @@ async function CommandRatings(message) {
         var handle = handles[i];
         var rating = ratings[handle];
         var logo = logo_of(rating);
-        if (USE_CHRISTMAS_RATINGS && handle.toLowerCase() in christmas_ratings) {
-            logo = logo_of(christmas_ratings[handle.toLowerCase()]);
-        }
         reply += `${logo}${left_align(handle, 18)}|  ${rating}\n`;
     }
     reply += "=============================```";
@@ -992,34 +982,23 @@ async function get_standings(contestid, handles) {
         return "CodeForces is down⚠️";
     }
     // console.log(ratings);
-    var christmas_ratings = {};
-    if (USE_CHRISTMAS_RATINGS) {
-        christmas_ratings = getChristmasRatings();
-    }
+
     var msg = `*Performance of Coders in ${contest_name} 🌐*\n\n\n`;
     if (performance.length > 0) {
-        msg += "```      Handle     Solved Rank\n";
-        msg +=    "============================\n";
+        msg += "```       Handle       Solved Rank\n";
+        msg +=    "===============================\n";
         for (var i = 0; i < performance.length; i++) {
-            let userLogo = logo_of(ratings[performance[i][0]]);
-            if (USE_CHRISTMAS_RATINGS && performance[i][0].toLowerCase() in christmas_ratings) {
-                userLogo = logo_of(christmas_ratings[performance[i][0].toLowerCase()]);
-            }
-            msg += `${userLogo}${left_align(performance[i][0], 17)}|${left_align(performance[i][2], 1).substring(1)}| ${performance[i][1]}\n`;
+            msg += `${logo_of(ratings[performance[i][0]])}${left_align(performance[i][0], 18)}|${left_align(performance[i][2], 3)}| ${performance[i][1]}\n`;
             delete ratings[performance[i][0]];
         }
-        msg +=    "============================```\n\n";
+        msg +=    "===============================```\n\n";
     }
     var absents = Object.keys(ratings);
     absents.sort(function(a,b) {return ratings[b] - ratings[a]});
     if (absents.length > 0) {
         msg += "*Coders who participated virtually or didn't participated*🚫\n```";
         for (var i = 0; i < absents.length; i++) {
-            let userLogo = logo_of(ratings[absents[i]]);
-            if (USE_CHRISTMAS_RATINGS && absents[i].toLowerCase() in christmas_ratings) {
-                userLogo = logo_of(christmas_ratings[absents[i].toLowerCase()]);
-            }
-            msg += `${userLogo}${left_align(absents[i], 26)}\n`;
+            msg += `${logo_of(ratings[absents[i]])}${left_align(absents[i], 26)}\n`;
         }
         msg += "```";
     }
@@ -1068,20 +1047,6 @@ function logo_of(r) {
     }
     return "⚪";
 }
-
-function getChristmasRatings() {
-    var christmas_ratings = {};
-    try {
-        console.log("Reading christmas ratings file...");
-        var jsonString = fs.readFileSync(christmas_ratings_file, "utf8");
-        christmas_ratings = JSON.parse(jsonString);
-        console.log("Successfully read ratings file!");
-    } catch (err) {
-        console.log("Error reading ratings file: " + err);
-    }
-    return christmas_ratings;
-}
-
 
 async function get_ratings(handles) {
     // NOTE: This function has key as handle with actual case. It may not be lower case!
