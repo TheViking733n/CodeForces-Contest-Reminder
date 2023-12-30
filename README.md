@@ -45,6 +45,7 @@ To install the required dependencies, run the following command:
 
 ```sh
 npm install whatsapp-web.js qrcode-terminal
+npm install request-promise
 ```
 
 
