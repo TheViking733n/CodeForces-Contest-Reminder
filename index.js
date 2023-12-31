@@ -851,8 +851,8 @@ async function Streak(message) {
     try {
         var diffTime = await getStreakInfo();
         var days = parseInt(diffTime / (1000 * 60 * 60 * 24));
-        var hours = parseInt(diffTime / (1000 * 60 * 60));
-        var mins = parseInt(diffTime / (1000 * 60));
+        var hours = parseInt(diffTime / (1000 * 60 * 60)) % 24;
+        var mins = parseInt(diffTime / (1000 * 60)) % 60;
         var reply = `*Streak Info:*\n\nLast Submission time: `
         if (days > 0) reply += `${days} days `;
         if (hours > 0) reply += `${hours} hours `;
@@ -1285,10 +1285,11 @@ async function maintain_streak() {
         var diffTime = await getStreakInfo();
         var days = parseInt(diffTime / (1000 * 60 * 60 * 24));
         var hours = parseInt(diffTime / (1000 * 60 * 60));
-        var mins = parseInt(diffTime / (1000 * 60));
-        if (hours >= 5) {
+        var mins = parseInt(diffTime / (1000 * 60)) % 60;
+        if (hours >= 6) {
             let msg = `*WARNING: ${hours>=24?"STREAK BROKEN":"Streak may break"}*\n\nLast Submission time: `
             if (days > 0) msg += `${days} days `;
+            hours = hours % 24;
             if (hours > 0) msg += `${hours} hours `;
             msg += `${mins} minutes`;
             client.sendMessage(temp512_groupid, msg);
