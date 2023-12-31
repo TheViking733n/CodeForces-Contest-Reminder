@@ -849,7 +849,7 @@ async function Streak(message) {
         return;
     }
     try {
-        var diffTime = getStreakInfo();
+        var diffTime = await getStreakInfo();
         var days = parseInt(diffTime / (1000 * 60 * 60 * 24));
         var hours = parseInt((days - Math.floor(days)) * 24);
         var mins = parseInt((hours - Math.floor(hours)) * 60);
@@ -1282,7 +1282,7 @@ async function maintain_streak() {
         return;
     }
     try {
-        var diffTime = getStreakInfo();
+        var diffTime = await getStreakInfo();
         var days = parseInt(diffTime / (1000 * 60 * 60 * 24));
         var hours = parseInt((days - Math.floor(days)) * 24);
         var mins = parseInt((hours - Math.floor(hours)) * 60);
