@@ -1,9 +1,9 @@
 /*
-Version 2.2.2
+Version 2.2.1
 Released on 22.12.2023
 
 New Features:
-    Created .streak command
+    Feature to override normal ratings and use christmas ratings.
 
 */
 
@@ -27,7 +27,6 @@ var upcoming_contest = null;
 const relative_server_time = 19800;   // 5.5 hours
 const super_admin = "918505077040@c.us";
 const config_file = './bot_config.json';
-const temp512_groupid = '120363048171503584@g.us'
 var CONFIG = {             // Default configuration
     "admins": [
         "918505077040@c.us"
@@ -236,10 +235,6 @@ async function parse(message) {
             case "contactcard":
             case "contactcards":
                 Contactcards(message, argline.toLowerCase());
-                break;
-
-            case "streak":
-                Streak(message, args);
                 break;
 
             default:
@@ -838,32 +833,6 @@ async function Addmembers(message, argline) {
 }
 
 
-async function Streak(message) {
-    // Private and silent command
-    var isGroup = is_group(message);
-    var group_id = message.from;
-    if (!isGroup) {
-        return;
-    }
-    if (group_id != temp512_groupid) {
-        return;
-    }
-    try {
-        var diffTime = getStreakInfo();
-        var days = parseInt(diffTime / (1000 * 60 * 60 * 24));
-        var hours = parseInt((days - Math.floor(days)) * 24);
-        var mins = parseInt((hours - Math.floor(hours)) * 60);
-        var reply = `*Streak Info:*\n\nLast Submission time: `
-        if (days > 0) reply += `${days} days `;
-        if (hours > 0) reply += `${hours} hours `;
-        reply += `${mins} minutes`;
-        client.sendMessage(message.from, reply);
-    } catch (e) {
-        console.log(e);
-        client.sendMessage(message.from, "Something went wrong while getting streak info‼️" + "\n\n" + e);
-        return;
-    }
-}
 
 
 
@@ -1056,21 +1025,6 @@ async function get_standings(contestid, handles) {
     }
 
     return msg;
-}
-
-
-async function getStreakInfo() {
-    // returns last submission difference time in milliseconds
-    let url = 'https://codeforces.com/api/user.status?handle=LeviAckerman4029&from=1&count=1';
-    let response = await fetch(url);
-    let json = await response.json();
-    if (json.status === 'OK') {
-        let lastSubmission = json.result[0];
-        let lastSubmissionDate = new Date(lastSubmission.creationTimeSeconds * 1000);
-        let currentDate = new Date();
-        let diffTime = Math.abs(currentDate - lastSubmissionDate);
-        return diffTime;
-    }
 }
 
 
@@ -1274,31 +1228,6 @@ async function send_reminder() {
     setTimeout(send_reminder, 60000);
 }
 
-
-async function maintain_streak() {
-    // This function is called every hour and it sends message to temp512 group if timeDiff > 5 hours
-    console.log(`Maintain Reminder function called`);
-    if (!is_client_ready) {
-        return;
-    }
-    try {
-        var diffTime = getStreakInfo();
-        var days = parseInt(diffTime / (1000 * 60 * 60 * 24));
-        var hours = parseInt((days - Math.floor(days)) * 24);
-        var mins = parseInt((hours - Math.floor(hours)) * 60);
-        if (hours >= 5) {
-            let msg = `*WARNING: ${hours>=24?"STREAK BROKEN":"Streak may break"}*\n\nLast Submission time: `
-            if (days > 0) msg += `${days} days `;
-            if (hours > 0) msg += `${hours} hours `;
-            msg += `${mins} minutes`;
-            client.sendMessage(temp512_groupid, msg);
-        }
-    } catch (e) {
-        console.log(e);
-    }
-}
-
-setInterval(maintain_streak, 3600000);   // Call maintain_streak for the first time after 1 hour
 
 // function check() {
 //     if (!is_client_ready) {
